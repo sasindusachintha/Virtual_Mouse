@@ -29,22 +29,21 @@ A **hand gesture-controlled virtual mouse** using Python, MediaPipe, and PyAutoG
 
 1. Clone the repository:
 git clone https://github.com/yourusername/Virtual_Mouse.git
-cd Virtual_Mouse
 
 2. Install dependencies:
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+- python -m pip install --upgrade pip
+- pip install -r requirements.txt
 
 ## Usage
 1. Connect a webcam to your PC.
 2. Run the virtual mouse script: (open cmd in project folder and type command below).
    python hand_mouse.py
 3. Use gestures as explained:
- Gesture                              	Action
-Right hand pinch (thumb + index)	      Click / Drag
-Left hand pinch	                        Right-click
-Left hand pinky up	                    Scroll
-ESC	                                    Quit application
+Gesture                              	Action
+- Right hand pinch (thumb + index)	      Click / Drag
+- Left hand pinch	                        Right-click
+- Left hand pinky up	                    Scroll
+- ESC	                                    Quit application
 
 ## Requirements
 - Python 3.10
