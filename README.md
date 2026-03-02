@@ -28,7 +28,7 @@ A **hand gesture-controlled virtual mouse** using Python, MediaPipe, and PyAutoG
 ## Installation
 
 1. Clone the repository:
-git clone https://github.com/yourusername/Virtual_Mouse.git
+git clone https://github.com/sasindusachintha/Virtual_Mouse.git
 
 2. Install dependencies:
 - python -m pip install --upgrade pip
