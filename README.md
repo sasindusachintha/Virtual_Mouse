@@ -36,14 +36,13 @@ git clone https://github.com/sasindusachintha/Virtual_Mouse.git
 
 ## Usage
 1. Connect a webcam to your PC.
-2. Run the virtual mouse script: (open cmd in project folder and type command below).
-   python hand_mouse.py
-3. Use gestures as explained:
-Gesture                              	Action
-- Right hand pinch (thumb + index)	      Click / Drag
-- Left hand pinch	                        Right-click
-- Left hand pinky up	                    Scroll
-- ESC	                                    Quit application
+2. Run the virtual mouse script:
+- (open cmd in project folder and type command below "python hand_mouse.py".)
+4. Use gestures as explained:
+- Right hand pinch (thumb + index) :- 	      Click / Drag
+- Left hand pinch:- 	                        Right-click
+- Left hand pinky up:- 	                    Scroll
+- ESC:- 	                                    Quit application
 
 ## Requirements
 - Python 3.10
@@ -57,7 +56,6 @@ All dependencies are listed in requirements.txt.
 ---
 
 ## Notes / Tips
-
 - Make sure your hand is well-lit and visible to the webcam for accurate detection.
 - Smooth cursor movement may take a few frames to respond initially.
 - Keep your hands within the camera frame and avoid fast rapid movements.
