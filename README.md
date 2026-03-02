@@ -63,11 +63,30 @@ All dependencies are listed in requirements.txt.
 
 ---
 
-## License
+## 🙌 Contributing
+- This is a personal learning project — but contributions are always welcome!
+- If you have ideas for new gestures, improvements, or optimizations, feel free to open an issue or submit a pull request.
+
+---
+
+## 📬 Connect with Me
+- Follow my progress or check out other projects here:
+- 👉 https://github.com/sasindusachintha
+
+---
+
+## 📄 License
 This project is released under the MIT License. See [LICENSE](LICENSE)
 for details.
 
 ---
+
+## ⭐ Thanks for checking out Virtual Mouse!
+- Hope it makes your computer experience more fun and interactive! 👆🖱️✨
+- Keep learning and keep experimenting with Python & computer vision!
+
+---
+
 ## Author
 Sasindu Sachintha
 GitHub: https://github.com/sasindusachintha
