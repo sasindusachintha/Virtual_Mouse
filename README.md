@@ -64,7 +64,7 @@ All dependencies are listed in requirements.txt.
 ---
 
 ## License
-This project is released under the MIT License. See LICENSE
+This project is released under the MIT License. See [LICENSE](LICENSE)
 for details.
 
 ---
