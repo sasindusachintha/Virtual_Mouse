@@ -22,9 +22,9 @@ The code lives in the project repository: entity["software","Virtual_Mouse
 
 The project depends on a few external packages:
 
-* entity["software","OpenCV","computer-vision library"] — camera capture, image display, and simple drawing overlays.
-* entity["software","PyAutoGUI","python automation library"] — moving the OS cursor, clicks, drags and scrolling.
-* entity["software","MediaPipe","google mediapipe handlandmarker"] — robust hand landmark detection (uses the `hand_landmarker.task` model file).
+* entity["software","OpenCV","computer-vision library"] — camera capture, image display, and simple drawing overlays.
+* entity["software","PyAutoGUI","python automation library"] — moving the OS cursor, clicks, drags and scrolling.
+* entity["software","MediaPipe","google mediapipe handlandmarker"] — robust hand landmark detection (uses the `hand_landmarker.task` model file).
 
 > Note: The repository expects a MediaPipe Task model file named `hand_landmarker.task` in the working directory (or adjust the code to point to the actual path). See the MediaPipe docs for how to export or download that model.
 
