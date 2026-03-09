@@ -6,12 +6,11 @@ import math
 from collections import deque
 
 # ─── MediaPipe Setup ───────────────────────────────────────────────────────────
-BaseOptions = mp.tasks.BaseOptions
-HandLandmarker = mp.tasks.vision.HandLandmarker
+BaseOptions       = mp.tasks.BaseOptions
+HandLandmarker    = mp.tasks.vision.HandLandmarker
 HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
-# Make sure 'hand_landmarker.task' is in your folder!
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path='hand_landmarker.task'),
     running_mode=VisionRunningMode.VIDEO,
@@ -20,34 +19,39 @@ options = HandLandmarkerOptions(
 detector = HandLandmarker.create_from_options(options)
 
 # ─── PyAutoGUI Settings ────────────────────────────────────────────────────────
-pyautogui.PAUSE = 0
+pyautogui.PAUSE    = 0
 pyautogui.FAILSAFE = False
 
-# ─── Parameters (Optimized for Stability) ──────────────────────────────────────
-MARGIN          = 110       # Deadzone at screen edges
-PINCH_CLOSE     = 30        # Distance to trigger click
-PINCH_OPEN      = 45        # Distance to release click (Hysteresis)
-SMOOTH          = 0.15      # Lower = smoother, Higher = faster
-DRAG_DELAY      = 0.25      # Seconds held before "Click" becomes "Drag"
-RIGHT_COOLDOWN  = 0.5       
-SCROLL_SENS     = 500       
+# ─── Tunable Parameters ────────────────────────────────────────────────────────
+MARGIN          = 110     # Deadzone at screen edges (pixels)
+PINCH_CLOSE     = 30      # Distance (px) to trigger pinch
+PINCH_OPEN      = 45      # Distance (px) to release pinch (hysteresis gap)
+SMOOTH          = 0.15    # Lerp factor: lower = smoother, higher = more responsive
+DRAG_DELAY      = 0.25    # Seconds held before click becomes drag
+RIGHT_COOLDOWN  = 0.5     # Seconds between right-clicks
+SCROLL_SENS     = 500     # Scroll multiplier
+HUD_DURATION    = 0.5     # Seconds to display HUD messages
+TARGET_FPS      = 60      # Cap processing rate
 
-# ─── State Variables ───────────────────────────────────────────────────────────
+# ─── State ─────────────────────────────────────────────────────────────────────
 screen_w, screen_h = pyautogui.size()
-cx, cy = pyautogui.position()
-pos_buffer = deque(maxlen=5)
+pos_buffer   = deque(maxlen=5)
+hud_messages = {}          # { label: expiry_timestamp }
 
-pinch_state     = "OPEN"    # OPEN | CLOSED
-pinch_start_t   = None
-is_dragging     = False
-frozen_x, frozen_y = None, None
-last_right_t    = 0
-prev_scroll_y   = None
+state = {
+    "cx": float(screen_w // 2),
+    "cy": float(screen_h // 2),
+    "pinch":        "OPEN",    # "OPEN" | "CLOSED"
+    "pinch_start":  None,
+    "dragging":     False,
+    "frozen_x":     None,
+    "frozen_y":     None,
+    "last_right_t": 0.0,
+    "prev_scroll_y": None,
+    "prev_scroll_t": 0.0,
+}
 
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
+# ─── Helpers ───────────────────────────────────────────────────────────────────
 def dist(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
@@ -57,132 +61,167 @@ def lm_px(lm, w, h):
 def to_screen(lm, fw, fh):
     sx = (lm.x * fw - MARGIN) / (fw - 2 * MARGIN) * screen_w
     sy = (lm.y * fh - MARGIN) / (fh - 2 * MARGIN) * screen_h
-    return max(0, min(screen_w - 1, sx)), max(0, min(screen_h - 1, sy))
+    return max(0.0, min(screen_w - 1.0, sx)), max(0.0, min(screen_h - 1.0, sy))
+
+def hand_scale(hand):
+    """Wrist (0) to middle-finger MCP (9) distance as a normalisation factor."""
+    dx = hand[0].x - hand[9].x
+    dy = hand[0].y - hand[9].y
+    return math.hypot(dx, dy) or 1e-6
 
 def is_pinky_up(hand):
-    # Pinky tip (20) vs Pinky base (17)
-    return hand[20].y < hand[17].y - 0.05
+    """Scale-invariant pinky check."""
+    scale = hand_scale(hand)
+    return (hand[17].y - hand[20].y) / scale > 0.15
 
-print("Starting AI Mouse... Press ESC to quit.")
+def weighted_avg(buf):
+    weights = list(range(1, len(buf) + 1))
+    total = sum(weights)
+    wx = sum(p[0] * w for p, w in zip(buf, weights)) / total
+    wy = sum(p[1] * w for p, w in zip(buf, weights)) / total
+    return wx, wy
 
+def hud_add(label, now):
+    hud_messages[label] = now + HUD_DURATION
+
+def hud_draw(frame, now):
+    active = [(lbl, exp) for lbl, exp in hud_messages.items() if exp > now]
+    hud_messages.clear()
+    hud_messages.update(dict(active))
+    for i, (lbl, _) in enumerate(active):
+        cv2.putText(frame, lbl, (20, 50 + i * 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 200), 2)
+
+# ─── Camera ────────────────────────────────────────────────────────────────────
+cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+frame_interval = 1.0 / TARGET_FPS
+last_frame_t   = 0.0
+
+print("AI Air Mouse running — ESC to quit.")
+
+# ─── Main Loop ─────────────────────────────────────────────────────────────────
 while cap.isOpened():
     ret, frame = cap.read()
-    if not ret: break
+    if not ret:
+        break
+
+    now = time.time()
+
+    # FPS cap
+    if now - last_frame_t < frame_interval:
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
+        continue
+    last_frame_t = now
 
     frame = cv2.flip(frame, 1)
     fh, fw = frame.shape[:2]
-    now = time.time()
 
-    mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, 
-                      data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    results = detector.detect_for_video(mp_img, int(now * 1000))
+    mp_img  = mp.Image(image_format=mp.ImageFormat.SRGB,
+                       data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    results = detector.detect_for_video(mp_img, int(now * 1_000_000))
 
-    hud = []
+    s = state   # shorthand alias
 
     if results.hand_landmarks:
-        # Sort hands: Rightmost hand on screen is the Mouse hand
-        sorted_hands = sorted(results.hand_landmarks, key=lambda lms: lms[8].x, reverse=True)
-        mh = sorted_hands[0]  
+        # Rightmost index fingertip on screen → mouse hand
+        sorted_hands = sorted(results.hand_landmarks,
+                               key=lambda lms: lms[8].x, reverse=True)
+        mh = sorted_hands[0]
 
-        idx_px = lm_px(mh[8], fw, fh)
-        thm_px = lm_px(mh[4], fw, fh)
-        mid_px = lm_px(mh[12], fw, fh)
+        idx_px  = lm_px(mh[8],  fw, fh)
+        thm_px  = lm_px(mh[4],  fw, fh)
         pinch_d = dist(idx_px, thm_px)
 
-        # ── 1. MOVEMENT LOGIC (Right Hand) ───────────────────────────────────
-        if pinch_state == "OPEN":
+        # ── 1. MOVEMENT ───────────────────────────────────────────────────────
+        if s["pinch"] == "OPEN" or s["dragging"]:
             tx, ty = to_screen(mh[8], fw, fh)
             pos_buffer.append((tx, ty))
-            
-            # Weighted average for extra stability
-            weights = list(range(1, len(pos_buffer) + 1))
-            wx = sum(p[0] * wt for p, wt in zip(pos_buffer, weights)) / sum(weights)
-            wy = sum(p[1] * wt for p, wt in zip(pos_buffer, weights)) / sum(weights)
+            wx, wy = weighted_avg(pos_buffer)
+            s["cx"] += (wx - s["cx"]) * SMOOTH
+            s["cy"] += (wy - s["cy"]) * SMOOTH
+            pyautogui.moveTo(s["cx"], s["cy"], _pause=False)
 
-            cx = cx + (wx - cx) * SMOOTH
-            cy = cy + (wy - cy) * SMOOTH
-            pyautogui.moveTo(cx, cy, _pause=False)
-        
-        elif is_dragging:
-            # Allow movement while dragging
-            tx, ty = to_screen(mh[8], fw, fh)
-            cx = cx + (tx - cx) * SMOOTH
-            cy = cy + (ty - cy) * SMOOTH
-            pyautogui.moveTo(cx, cy, _pause=False)
+        # ── 2. CLICK / DRAG ───────────────────────────────────────────────────
+        if s["pinch"] == "OPEN" and pinch_d < PINCH_CLOSE:
+            s["pinch"]       = "CLOSED"
+            s["pinch_start"] = now
+            s["frozen_x"]    = s["cx"]
+            s["frozen_y"]    = s["cy"]
 
-        # ── 2. CLICK / DRAG LOGIC (Right Hand) ──────────────────────────────
-        if pinch_state == "OPEN" and pinch_d < PINCH_CLOSE:
-            pinch_state = "CLOSED"
-            pinch_start_t = now
-            frozen_x, frozen_y = cx, cy # Lock position for clean click
+        elif s["pinch"] == "CLOSED":
+            held = now - s["pinch_start"]
 
-        elif pinch_state == "CLOSED":
-            held = now - pinch_start_t
-            
-            # Promote to Drag if held
-            if held >= DRAG_DELAY and not is_dragging:
-                pyautogui.mouseDown(frozen_x, frozen_y)
-                is_dragging = True
+            if held >= DRAG_DELAY and not s["dragging"]:
+                pyautogui.mouseDown(s["frozen_x"], s["frozen_y"])
+                s["dragging"] = True
+                hud_add("DRAG", now)
 
-            # Release
             if pinch_d > PINCH_OPEN:
-                if is_dragging:
+                if s["dragging"]:
                     pyautogui.mouseUp()
-                    is_dragging = False
-                    hud.append("DROP")
+                    s["dragging"] = False
+                    hud_add("DROP", now)
                 else:
-                    pyautogui.click(frozen_x, frozen_y)
-                    hud.append("CLICK!")
-                
-                pinch_state = "OPEN"
-                frozen_x = frozen_y = None
+                    pyautogui.click(s["frozen_x"], s["frozen_y"])
+                    hud_add("CLICK!", now)
+                s["pinch"]    = "OPEN"
+                s["frozen_x"] = s["frozen_y"] = None
 
-        # ── 3. SECONDARY HAND (Left Hand) ────────────────────────────────────
+        # ── 3. LEFT HAND (right-click & scroll) ───────────────────────────────
         if len(sorted_hands) > 1:
-            lh = sorted_hands[1]
+            lh    = sorted_hands[1]
             l_idx = lm_px(lh[8], fw, fh)
             l_thm = lm_px(lh[4], fw, fh)
 
-            # Right Click (Left Index Pinch)
             if dist(l_idx, l_thm) < PINCH_CLOSE:
-                if now - last_right_t > RIGHT_COOLDOWN:
+                if now - s["last_right_t"] > RIGHT_COOLDOWN:
                     pyautogui.rightClick()
-                    last_right_t = now
-                    hud.append("RIGHT CLICK")
+                    s["last_right_t"] = now
+                    hud_add("RIGHT CLICK", now)
                 cv2.circle(frame, l_idx, 20, (255, 0, 0), cv2.FILLED)
 
-            # Scroll (Left Pinky Up)
             elif is_pinky_up(lh):
                 curr_y = lh[8].y
-                if prev_scroll_y is not None:
-                    delta = (prev_scroll_y - curr_y) * SCROLL_SENS
+                if s["prev_scroll_y"] is not None:
+                    delta = (s["prev_scroll_y"] - curr_y) * SCROLL_SENS
                     if abs(delta) > 1:
                         pyautogui.scroll(int(delta))
-                prev_scroll_y = curr_y
-                hud.append("SCROLLING")
+                s["prev_scroll_y"] = curr_y
+                s["prev_scroll_t"] = now
+                hud_add("SCROLLING", now)
                 cv2.circle(frame, lm_px(lh[20], fw, fh), 10, (0, 255, 255), cv2.FILLED)
             else:
-                prev_scroll_y = None
+                # Only reset scroll if pinky has been down for >2 frames
+                if now - s["prev_scroll_t"] > 0.1:
+                    s["prev_scroll_y"] = None
 
         # Visuals
-        color = (0, 0, 255) if is_dragging else (0, 255, 0)
+        color = (0, 0, 255) if s["dragging"] else (0, 255, 0)
         cv2.circle(frame, idx_px, 12, color, cv2.FILLED)
         cv2.circle(frame, thm_px, 10, color, cv2.FILLED)
 
     else:
-        # Safety reset
-        if is_dragging:
+        # Safety reset when no hands detected
+        if s["dragging"]:
             pyautogui.mouseUp()
-            is_dragging = False
-        pinch_state = "OPEN"
+            s["dragging"] = False
+        s["pinch"]         = "OPEN"
+        s["prev_scroll_y"] = None
 
-    # ── HUD & GUI ────────────────────────────────────────────────────────────
-    for i, line in enumerate(hud):
-        cv2.putText(frame, line, (20, 50 + i * 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 200), 2)
+    # ── HUD & Display ─────────────────────────────────────────────────────────
+    hud_draw(frame, now)
+    cv2.rectangle(frame, (MARGIN, MARGIN), (fw - MARGIN, fh - MARGIN),
+                  (255, 255, 255), 1)
+    cv2.imshow("AI Air Mouse", frame)
+    if cv2.waitKey(1) & 0xFF == 27:
+        break
 
-    cv2.rectangle(frame, (MARGIN, MARGIN), (fw-MARGIN, fh-MARGIN), (255, 255, 255), 1)
-    cv2.imshow("Pro AI Air Mouse", frame)
-    if cv2.waitKey(1) & 0xFF == 27: break
-
+# ─── Cleanup ───────────────────────────────────────────────────────────────────
+if s["dragging"]:
+    pyautogui.mouseUp()
 cap.release()
 cv2.destroyAllWindows()
