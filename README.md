@@ -36,9 +36,8 @@ git clone https://github.com/sasindusachintha/Virtual_Mouse.git
 
 ## Usage
 1. Connect a webcam to your PC.
-2. Run the virtual mouse script:
-- (open cmd in project folder and type command below "python hand_mouse.py".)
-4. Use gestures as explained:
+2. Run the virtual mouse script: - (open cmd in project folder and type command below "python hand_mouse.py".)
+3. Use gestures as explained:
 - Right hand pinch (thumb + index) :- 	      Click / Drag
 - Left hand pinch:- 	                        Right-click
 - Left hand pinky up:- 	                    Scroll
@@ -63,11 +62,30 @@ All dependencies are listed in requirements.txt.
 
 ---
 
-## License
-This project is released under the MIT License. See LICENSE
+## 🙌 Contributing
+- This is a personal learning project — but contributions are always welcome!
+- If you have ideas for new gestures, improvements, or optimizations, feel free to open an issue or submit a pull request.
+
+---
+
+## 📬 Connect with Me
+- Follow my progress or check out other projects here:
+- 👉 https://github.com/sasindusachintha
+
+---
+
+## 📄 License
+This project is released under the MIT License. See [LICENSE](LICENSE)
 for details.
 
 ---
+
+## ⭐ Thanks for checking out Virtual Mouse!
+- Hope it makes your computer experience more fun and interactive! 👆🖱️✨
+- Keep learning and keep experimenting with Python & computer vision!
+
+---
+
 ## Author
 Sasindu Sachintha
 GitHub: https://github.com/sasindusachintha
