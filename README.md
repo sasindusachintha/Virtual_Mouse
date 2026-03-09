@@ -157,13 +157,5 @@ Ideas for future work:
 * Cursor control via PyAutoGUI.
 * Camera & overlays via OpenCV.
 
-License: choose a permissive license (MIT recommended) and add `LICENSE` to the repo if you want others to reuse the code.
-
 ---
 
-If you want, I can also:
-
-* produce a short `CONTRIBUTING.md` with steps to add features and run tests, or
-* draft a minimal `install.sh` to automate dependency setup.
-
-Tell me which you’d like next.
